@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StreetAuth - StreetDevs Key System & HWID Manager</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            street: {
+              950: '#06070a',
+              900: '#0c0e14',
+              850: '#12151f',
+              800: '#191d2b',
+              700: '#252b3d',
+              red: '#ff1f3d',
+              redDark: '#c70e28',
+              crimson: '#e11d48',
+              neon: '#00f59b',
+              purple: '#9333ea',
+              amber: '#f59e0b'
+            }
+          },
+          fontFamily: {
+            mono: ['JetBrains Mono', 'Fira Code', 'Courier New', 'monospace'],
+            sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+    
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #06070a;
+      color: #e2e8f0;
+    }
+    
+    .glow-street-red {
+      box-shadow: 0 0 25px rgba(255, 31, 61, 0.35);
+    }
+
+    .glow-street-red-sm {
+      box-shadow: 0 0 12px rgba(255, 31, 61, 0.25);
+    }
+    
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0c0e14;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #232a3b;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #37425c;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-street-950 text-slate-200 antialiased selection:bg-street-red selection:text-white">
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2.5 pointer-events-none"></div>
+
+  <!-- Dynamic Modal Container -->
+  <div id="modal-container" class="fixed inset-0 bg-black/85 backdrop-blur-md z-40 hidden flex items-center justify-center p-4"></div>
+
+  <!-- ================= AUTHENTICATION OVERLAY / LOGIN SCREEN ================= -->
+  <div id="auth-gate-screen" class="fixed inset-0 z-50 bg-street-950 flex items-center justify-center p-4">
+    <div class="absolute w-96 h-96 bg-red-600/10 rounded-full blur-3xl pointer-events-none -top-10 -left-10"></div>
+    <div class="absolute w-96 h-96 bg-street-red/10 rounded-full blur-3xl pointer-events-none -bottom-10 -right-10"></div>
+
+    <div class="w-full max-w-md bg-street-900 border border-street-800 rounded-3xl p-7 md:p-9 shadow-2xl relative z-10 glow-street-red-sm">
+      <div class="flex flex-col items-center text-center mb-7">
+        <div class="h-16 w-16 rounded-2xl bg-gradient-to-br from-street-red to-red-800 flex items-center justify-center text-white shadow-xl glow-street-red font-black text-2xl mb-4 border border-red-500/40">
+          <i data-lucide="shield-lock" class="w-8 h-8"></i>
+        </div>
+        <h1 class="font-black text-2xl text-white tracking-wider flex items-center gap-2">
+          STREET<span class="text-street-red">AUTH</span>
+          <span class="text-[11px] bg-red-950/90 text-red-400 border border-red-500/50 px-2 py-0.5 rounded font-mono font-bold tracking-widest">DEVS</span>
+        </h1>
+        <p class="text-xs text-slate-400 mt-1 font-medium">Acesso Restrito &bull; Apenas Operadores Autorizados</p>
+      </div>
+
+      <div id="login-error-msg" class="hidden mb-5 p-3 rounded-xl bg-red-500/15 border border-red-500/40 text-red-400 text-xs flex items-center gap-2.5">
+        <i data-lucide="alert-octagon" class="w-4 h-4 shrink-0"></i>
+        <span id="login-error-text">Credenciais inválidas. Acesso recusado.</span>
+      </div>
+
+      <form id="operator-login-form" onsubmit="handleOperatorLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">Operador (Nome)</label>
+          <div class="relative">
+            <i data-lucide="user" class="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5"></i>
+            <input type="text" id="login-username" required placeholder="Digite o operador..." autocomplete="username"
+              class="w-full bg-street-950 border border-street-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-street-red focus:ring-1 focus:ring-street-red font-sans transition-all">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">Chave Mestra / Senha</label>
+          <div class="relative">
+            <i data-lucide="lock" class="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5"></i>
+            <input type="password" id="login-password" required placeholder="••••••••••••••••••••" autocomplete="current-password"
+              class="w-full bg-street-950 border border-street-800 rounded-xl pl-10 pr-10 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-street-red focus:ring-1 focus:ring-street-red font-mono transition-all">
+            <button type="button" onclick="togglePasswordVisibility()" class="absolute right-3.5 top-3.5 text-slate-500 hover:text-slate-300">
+              <i data-lucide="eye" id="toggle-pwd-icon" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="pt-2">
+          <button type="submit" id="login-submit-btn" class="w-full py-3.5 bg-gradient-to-r from-street-red to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold rounded-xl transition-all shadow-lg glow-street-red flex items-center justify-center gap-2 text-sm">
+            <i data-lucide="log-in" class="w-4 h-4"></i>
+            Entrar no Painel StreetDevs
+          </button>
+        </div>
+      </form>
+
+      <div class="mt-6 pt-5 border-t border-street-800 text-center text-[11px] text-slate-500 flex items-center justify-center gap-2">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5 text-street-red"></i>
+        <span>Cadastro desativado &bull; 3 contas autorizadas</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DASHBOARD MAIN APPLICATION ================= -->
+  <div id="main-panel-app" class="hidden flex flex-col lg:flex-row min-h-screen">
+
+    <!-- Sidebar Lateral -->
+    <aside class="w-full lg:w-72 bg-street-900 border-r border-street-800 p-5 flex flex-col justify-between shrink-0">
+      <div>
+        <!-- Logo Header -->
+        <div class="flex items-center gap-3.5 pb-6 border-b border-street-800/80">
+          <div class="h-11 w-11 rounded-xl bg-gradient-to-br from-street-red to-red-700 flex items-center justify-center text-white shadow-lg glow-street-red font-black text-xl">
+            <i data-lucide="shield-check" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <h1 class="font-black text-lg text-white tracking-wide flex items-center gap-1.5">
+              STREET<span class="text-street-red">AUTH</span>
+              <span class="text-[10px] bg-red-950/90 text-red-400 border border-red-500/50 px-1.5 py-0.5 rounded font-mono font-bold tracking-wider">DEVS</span>
+            </h1>
+            <p class="text-xs text-slate-400 font-medium">StreetDevs Key System</p>
+          </div>
+        </div>
+
+        <!-- Navigation Links (Simulador removido) -->
+        <nav class="mt-6 space-y-1.5">
+          <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-white bg-street-red/15 border border-street-red/40 text-red-400">
+            <i data-lucide="layout-dashboard" class="w-5 h-5 text-street-red"></i>
+            Painel Geral
+          </button>
+          <button onclick="switchTab('keys')" id="nav-keys" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-slate-400 hover:text-white hover:bg-street-850">
+            <i data-lucide="key" class="w-5 h-5"></i>
+            Chaves de Licença
+          </button>
+          <button onclick="switchTab('logs')" id="nav-logs" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-slate-400 hover:text-white hover:bg-street-850">
+            <i data-lucide="history" class="w-5 h-5"></i>
+            Logs de Acesso
+          </button>
+          <button onclick="switchTab('blacklist')" id="nav-blacklist" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-slate-400 hover:text-white hover:bg-street-850">
+            <i data-lucide="shield-ban" class="w-5 h-5"></i>
+            Blacklist HWID
+          </button>
+        </nav>
+      </div>
+
+      <!-- Quick System Info -->
+      <div class="mt-8 pt-5 border-t border-street-800">
+        <div class="bg-street-950 p-3.5 rounded-xl border border-street-800/90 text-xs space-y-2.5">
+          <div class="flex justify-between items-center text-slate-400">
+            <span>Status da API:</span>
+            <span class="inline-flex items-center gap-1.5 text-street-neon font-medium">
+              <span class="w-2 h-2 rounded-full bg-street-neon animate-pulse"></span> Online
+            </span>
+          </div>
+          <div class="flex justify-between items-center text-slate-400">
+            <span>Base Local:</span>
+            <span class="text-red-400 font-mono font-semibold">StreetDevs DB Limpo</span>
+          </div>
+          <button onclick="resetAllDataConfirmation()" class="w-full mt-2 text-center text-red-400 hover:text-red-300 py-1.5 hover:bg-red-500/10 rounded-lg transition-colors border border-red-900/50 text-[11px] font-semibold">
+            Limpar Todos os Dados
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 p-4 lg:p-8 overflow-y-auto">
+
+      <!-- Header Topbar -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div>
+          <h2 id="view-title" class="text-2xl font-black text-white tracking-tight flex items-center gap-2">
+            Painel Geral
+          </h2>
+          <p id="view-subtitle" class="text-sm text-slate-400">Gestão de licenças, trava de hardware e controle de acessos</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2.5">
+          <!-- Active Operator Badge & Logout -->
+          <div class="flex items-center gap-2 bg-street-900 border border-street-800 px-3.5 py-1.5 rounded-xl">
+            <span class="w-2 h-2 rounded-full bg-street-neon animate-pulse"></span>
+            <span class="text-xs text-slate-400">Operador:</span>
+            <span id="active-operator-name" class="text-xs font-bold text-white tracking-wide">Dapaz</span>
+            <button onclick="handleOperatorLogout()" title="Sair do Sistema" class="ml-2 text-slate-400 hover:text-red-400 p-1 hover:bg-street-800 rounded transition-colors">
+              <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+          <button onclick="openCreateKeyModal()" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-street-red to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold text-sm flex items-center gap-2 shadow-lg glow-street-red transition-all">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            Criar Key
+          </button>
+        </div>
+      </div>
+
+      <!-- ================= SECTION: DASHBOARD ================= -->
+      <div id="tab-dashboard" class="space-y-8">
+        <!-- Stat Cards (Inicialmente 0) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <!-- Total Keys -->
+          <div class="bg-street-900 border border-street-800 rounded-2xl p-5 relative overflow-hidden group hover:border-red-500/30 transition-all">
+            <div class="flex items-center justify-between text-slate-400">
+              <span class="text-xs font-semibold uppercase tracking-wider">Total de Keys</span>
+              <div class="p-2.5 bg-red-500/10 rounded-xl text-street-red border border-red-500/25">
+                <i data-lucide="key" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="mt-3">
+              <span id="stat-total-keys" class="text-3xl font-black text-white">0</span>
+            </div>
+            <div class="mt-1 text-[11px] text-slate-400">Emitidas no StreetAuth</div>
+          </div>
+
+          <!-- Active Keys -->
+          <div class="bg-street-900 border border-street-800 rounded-2xl p-5 relative overflow-hidden group hover:border-emerald-500/30 transition-all">
+            <div class="flex items-center justify-between text-slate-400">
+              <span class="text-xs font-semibold uppercase tracking-wider">Chaves Ativas</span>
+              <div class="p-2.5 bg-emerald-500/10 rounded-xl text-street-neon border border-emerald-500/25">
+                <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="mt-3">
+              <span id="stat-active-keys" class="text-3xl font-black text-street-neon">0</span>
+            </div>
+            <div class="mt-1 text-[11px] text-slate-400">Liberadas para clientes</div>
+          </div>
+
+          <!-- Expired Keys -->
+          <div class="bg-street-900 border border-street-800 rounded-2xl p-5 relative overflow-hidden group hover:border-amber-500/30 transition-all">
+            <div class="flex items-center justify-between text-slate-400">
+              <span class="text-xs font-semibold uppercase tracking-wider">Expiradas</span>
+              <div class="p-2.5 bg-amber-500/10 rounded-xl text-amber-400 border border-amber-500/25">
+                <i data-lucide="clock" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="mt-3">
+              <span id="stat-expired-keys" class="text-3xl font-black text-amber-400">0</span>
+            </div>
+            <div class="mt-1 text-[11px] text-slate-400">Prazo de licença vencido</div>
+          </div>
+
+          <!-- Banned HWIDs -->
+          <div class="bg-street-900 border border-street-800 rounded-2xl p-5 relative overflow-hidden group hover:border-red-500/30 transition-all">
+            <div class="flex items-center justify-between text-slate-400">
+              <span class="text-xs font-semibold uppercase tracking-wider">HWIDs Banidos</span>
+              <div class="p-2.5 bg-red-600/15 rounded-xl text-red-400 border border-red-500/30">
+                <i data-lucide="shield-x" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="mt-3">
+              <span id="stat-banned-hwid" class="text-3xl font-black text-red-500">0</span>
+            </div>
+            <div class="mt-1 text-[11px] text-slate-400">Na Blacklist StreetDevs</div>
+          </div>
+
+          <!-- Total Logins -->
+          <div class="bg-street-900 border border-street-800 rounded-2xl p-5 relative overflow-hidden group hover:border-purple-500/30 transition-all">
+            <div class="flex items-center justify-between text-slate-400">
+              <span class="text-xs font-semibold uppercase tracking-wider">Logins Totais</span>
+              <div class="p-2.5 bg-purple-500/10 rounded-xl text-purple-400 border border-purple-500/25">
+                <i data-lucide="activity" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="mt-3">
+              <span id="stat-total-logins" class="text-3xl font-black text-purple-400">0</span>
+            </div>
+            <div class="mt-1 text-[11px] text-slate-400">Tentativas auditadas</div>
+          </div>
+        </div>
+
+        <!-- Dashboard Fast Actions & Recent Activity -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-2 bg-street-900 border border-street-800 rounded-2xl p-6">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2.5">
+                <i data-lucide="flame" class="w-5 h-5 text-street-red"></i>
+                <h3 class="font-bold text-white text-base">Atividades Recentes de Login</h3>
+              </div>
+              <button onclick="switchTab('logs')" class="text-xs text-red-400 hover:text-red-300 font-semibold flex items-center gap-1">
+                Ver todos os logs &rarr;
+              </button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b border-street-800 text-slate-400 uppercase tracking-wider font-semibold">
+                    <th class="py-3 px-3">Status</th>
+                    <th class="py-3 px-3">Chave</th>
+                    <th class="py-3 px-3">HWID</th>
+                    <th class="py-3 px-3">Horário</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboard-recent-logs" class="divide-y divide-street-800/60 font-mono">
+                  <!-- Injetado via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Quick Security Controls Card -->
+          <div class="bg-street-900 border border-street-800 rounded-2xl p-6 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center gap-2.5 mb-4">
+                <i data-lucide="sliders" class="w-5 h-5 text-red-400"></i>
+                <h3 class="font-bold text-white text-base">Ações StreetDevs</h3>
+              </div>
+              <p class="text-xs text-slate-400 leading-relaxed mb-4">
+                Comandos rápidos para controle das licenças e gerenciamento de hardware.
+              </p>
+
+              <div class="space-y-3">
+                <button onclick="openCreateKeyModal()" class="w-full text-left p-3.5 rounded-xl bg-street-850 hover:bg-street-800 border border-street-700/60 transition-all flex items-center justify-between">
+                  <div class="flex items-center gap-2.5">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-street-red"></i>
+                    <span class="text-xs font-semibold text-slate-200">Criar Nova Chave</span>
+                  </div>
+                  <span class="text-[11px] text-red-400 font-semibold">+ Adicionar</span>
+                </button>
+
+                <button onclick="expireAllOutdatedKeys()" class="w-full text-left p-3.5 rounded-xl bg-street-850 hover:bg-street-800 border border-street-700/60 transition-all flex items-center justify-between">
+                  <div class="flex items-center gap-2.5">
+                    <i data-lucide="refresh-cw" class="w-4 h-4 text-amber-400"></i>
+                    <span class="text-xs font-semibold text-slate-200">Varredura de Validade</span>
+                  </div>
+                  <span class="text-[11px] text-slate-400">Auditar</span>
+                </button>
+
+                <button onclick="openBanHWIDModal()" class="w-full text-left p-3.5 rounded-xl bg-street-850 hover:bg-red-950/20 border border-red-900/40 transition-all flex items-center justify-between">
+                  <div class="flex items-center gap-2.5">
+                    <i data-lucide="shield-x" class="w-4 h-4 text-red-400"></i>
+                    <span class="text-xs font-semibold text-slate-200">Banir HWID Manualmente</span>
+                  </div>
+                  <span class="text-[11px] text-red-400 font-semibold">Bloquear</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-6 pt-4 border-t border-street-800 text-[11px] text-slate-500">
+              StreetDevs Key System: Sistema pronto para produção em site.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= SECTION: CHAVES DE LICENÇA ================= -->
+      <div id="tab-keys" class="hidden space-y-6">
+        <!-- Controls & Filter Toolbar -->
+        <div class="bg-street-900 border border-street-800 p-4 rounded-2xl flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div class="relative w-full md:w-96">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3"></i>
+            <input type="text" id="search-key-input" oninput="renderKeysTable()" placeholder="Buscar por chave, cliente ou HWID..."
+              class="w-full bg-street-950 border border-street-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-street-red">
+          </div>
+
+          <div class="flex items-center gap-2 w-full md:w-auto">
+            <select id="filter-key-status" onchange="renderKeysTable()" class="bg-street-950 border border-street-800 text-slate-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-street-red">
+              <option value="all">Todos os Status</option>
+              <option value="active">Apenas Ativas</option>
+              <option value="expired">Apenas Expiradas</option>
+              <option value="bound">Com HWID Vinculado</option>
+              <option value="unbound">Sem HWID (Livre)</option>
+              <option value="banned">HWID Banido</option>
+            </select>
+
+            <button onclick="openCreateKeyModal()" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-street-red to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg glow-street-red transition-all">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              Criar Key
+            </button>
+
+            <button onclick="exportKeysJSON()" class="px-3.5 py-2 rounded-xl bg-street-850 hover:bg-street-800 text-slate-200 text-xs flex items-center gap-1.5 border border-street-700 transition-colors">
+              <i data-lucide="download" class="w-3.5 h-3.5 text-red-400"></i>
+              Exportar
+            </button>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-street-900 border border-street-800 rounded-2xl overflow-hidden shadow-xl">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-street-950/80 border-b border-street-800 text-slate-400 uppercase tracking-wider font-semibold">
+                <tr>
+                  <th class="py-3.5 px-4">Chave Street</th>
+                  <th class="py-3.5 px-4">Status</th>
+                  <th class="py-3.5 px-4">Cliente / Nota</th>
+                  <th class="py-3.5 px-4">HWID Vinculado</th>
+                  <th class="py-3.5 px-4">Resets</th>
+                  <th class="py-3.5 px-4">Expiração</th>
+                  <th class="py-3.5 px-4 text-right">Ações StreetDevs</th>
+                </tr>
+              </thead>
+              <tbody id="keys-table-body" class="divide-y divide-street-800/60 font-mono">
+                <!-- Renderizado via JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <div id="no-keys-placeholder" class="hidden p-12 text-center text-slate-500">
+            <i data-lucide="key-round" class="w-12 h-12 mx-auto stroke-[1.5] mb-3 text-slate-600"></i>
+            <p class="text-sm font-medium">Nenhuma chave cadastrada no sistema.</p>
+            <button onclick="openCreateKeyModal()" class="mt-3 px-3 py-1.5 rounded-lg bg-street-850 border border-street-700 text-xs text-red-400 hover:text-white transition-colors">
+              Clique aqui para criar a primeira chave
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= SECTION: LOGS DE ACESSO ================= -->
+      <div id="tab-logs" class="hidden space-y-6">
+        <div class="bg-street-900 border border-street-800 p-4 rounded-2xl flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div class="relative w-full md:w-96">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3"></i>
+            <input type="text" id="search-logs-input" oninput="renderLogsTable()" placeholder="Filtrar logs por chave, HWID ou IP..."
+              class="w-full bg-street-950 border border-street-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-street-red">
+          </div>
+
+          <div class="flex items-center gap-2 w-full md:w-auto">
+            <select id="filter-log-status" onchange="renderLogsTable()" class="bg-street-950 border border-street-800 text-slate-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-street-red">
+              <option value="all">Todos os Status</option>
+              <option value="SUCCESS">Sucessos</option>
+              <option value="FAILED">Falhas</option>
+              <option value="BANNED">Banidos</option>
+            </select>
+
+            <button onclick="clearAllLogsConfirmation()" class="px-3.5 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs flex items-center gap-1.5 border border-red-900/50 transition-colors">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              Limpar Logs
+            </button>
+
+            <button onclick="exportLogsJSON()" class="px-3.5 py-2 rounded-xl bg-street-850 hover:bg-street-800 text-slate-200 text-xs flex items-center gap-1.5 border border-street-700 transition-colors">
+              <i data-lucide="file-json" class="w-3.5 h-3.5 text-red-400"></i>
+              Exportar JSON
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-street-900 border border-street-800 rounded-2xl overflow-hidden shadow-xl">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-street-950/80 border-b border-street-800 text-slate-400 uppercase tracking-wider font-semibold">
+                <tr>
+                  <th class="py-3.5 px-4">Data & Horário</th>
+                  <th class="py-3.5 px-4">Status</th>
+                  <th class="py-3.5 px-4">Chave Usada</th>
+                  <th class="py-3.5 px-4">HWID Informado</th>
+                  <th class="py-3.5 px-4">IP</th>
+                  <th class="py-3.5 px-4">Diagnóstico / Motivo</th>
+                </tr>
+              </thead>
+              <tbody id="logs-table-body" class="divide-y divide-street-800/60 font-mono">
+                <!-- Renderizado via JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <div id="no-logs-placeholder" class="hidden p-12 text-center text-slate-500">
+            <i data-lucide="file-x" class="w-12 h-12 mx-auto stroke-[1.5] mb-3 text-slate-600"></i>
+            <p class="text-sm font-medium">Nenhum registro de log no momento.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= SECTION: BLACKLIST DE HWID ================= -->
+      <div id="tab-blacklist" class="hidden space-y-6">
+        <div class="bg-street-900 border border-street-800 rounded-2xl p-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-street-800 mb-6">
+            <div class="flex items-center gap-3.5">
+              <div class="p-2.5 bg-red-600/15 rounded-xl text-red-400 border border-red-500/30">
+                <i data-lucide="shield-alert" class="w-6 h-6"></i>
+              </div>
+              <div>
+                <h3 class="text-lg font-bold text-white">Blacklist de HWID (Street Block)</h3>
+                <p class="text-xs text-slate-400">Dispositivos marcados nesta lista são bloqueados em todas as licenças StreetDevs.</p>
+              </div>
+            </div>
+
+            <button onclick="openBanHWIDModal()" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-street-red to-red-700 hover:from-red-500 hover:to-red-600 text-white font-semibold text-xs flex items-center gap-2 shadow-lg glow-street-red-sm transition-all">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              Banir Novo HWID
+            </button>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-street-950/80 border-b border-street-800 text-slate-400 uppercase tracking-wider font-semibold">
+                <tr>
+                  <th class="py-3.5 px-4">Identificador HWID</th>
+                  <th class="py-3.5 px-4">Motivo do Ban</th>
+                  <th class="py-3.5 px-4">Data do Bloqueio</th>
+                  <th class="py-3.5 px-4 text-right">Ação</th>
+                </tr>
+              </thead>
+              <tbody id="blacklist-table-body" class="divide-y divide-street-800/60 font-mono">
+                <!-- Renderizado via JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <div id="no-blacklist-placeholder" class="hidden p-12 text-center text-slate-500">
+            <i data-lucide="check-circle-2" class="w-12 h-12 mx-auto stroke-[1.5] mb-3 text-street-neon/40"></i>
+            <p class="text-sm font-medium">Nenhum HWID banido. Blacklist vazia.</p>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    /* =====================================================================
+       STREETAUTH CORE CONTROLLER & LOCALSTORAGE STORE (100% LIMPO PARA PRODUÇÃO)
+       ===================================================================== */
+
+    const STORAGE_KEY_AUTH_KEYS = 'streetauth_prod_keys';
+    const STORAGE_KEY_AUTH_LOGS = 'streetauth_prod_logs';
+    const STORAGE_KEY_AUTH_BLACKLIST = 'streetauth_prod_blacklist';
+    const STORAGE_KEY_OPERATOR_SESSION = 'streetauth_prod_operator_session';
+
+    // Authorized Operators (Sem registro permitido)
+    const AUTHORIZED_OPERATORS = [
+      { username: 'Dapaz', password: 'StreetBypassDev22145676' },
+      { username: 'Vt', password: 'StreetBypassDev22145676' },
+      { username: 'Cotoco', password: 'StreetBypassDev22145676' }
+    ];
+
+    // State 100% Zerado para Produção
+    let currentOperator = null;
+    let keys = [];
+    let logs = [];
+    let blacklist = [];
+
+    /* ================= AUTHENTICATION GATE ================= */
+    function checkOperatorSession() {
+      const saved = sessionStorage.getItem(STORAGE_KEY_OPERATOR_SESSION) || localStorage.getItem(STORAGE_KEY_OPERATOR_SESSION);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.username) {
+            grantOperatorAccess(parsed.username, false);
+            return;
+          }
+        } catch (e) {
+          sessionStorage.removeItem(STORAGE_KEY_OPERATOR_SESSION);
+          localStorage.removeItem(STORAGE_KEY_OPERATOR_SESSION);
+        }
+      }
+      lockOperatorAccess();
+    }
+
+    function handleOperatorLogin(e) {
+      e.preventDefault();
+      const userField = document.getElementById('login-username');
+      const passField = document.getElementById('login-password');
+      const errorBox = document.getElementById('login-error-msg');
+      const errorText = document.getElementById('login-error-text');
+
+      const inputUser = userField.value.trim();
+      const inputPass = passField.value;
+
+      const validUser = AUTHORIZED_OPERATORS.find(
+        op => op.username.toLowerCase() === inputUser.toLowerCase() && op.password === inputPass
+      );
+
+      if (!validUser) {
+        errorBox.classList.remove('hidden');
+        errorText.innerText = "Credenciais inválidas. Operador não autorizado.";
+        userField.classList.add('border-red-500');
+        passField.classList.add('border-red-500');
+        return;
+      }
+
+      errorBox.classList.add('hidden');
+      grantOperatorAccess(validUser.username, true);
+    }
+
+    function grantOperatorAccess(username, notify = false) {
+      currentOperator = username;
+      const sessionPayload = JSON.stringify({ username: username, timestamp: Date.now() });
+      sessionStorage.setItem(STORAGE_KEY_OPERATOR_SESSION, sessionPayload);
+      localStorage.setItem(STORAGE_KEY_OPERATOR_SESSION, sessionPayload);
+
+      document.getElementById('auth-gate-screen').classList.add('hidden');
+      document.getElementById('main-panel-app').classList.remove('hidden');
+      document.getElementById('active-operator-name').innerText = username;
+
+      if (notify) {
+        showToast(`Bem-vindo, Operador ${username}! Painel StreetDevs liberado.`, 'success');
+        addLog({
+          key: 'SYS-AUTH',
+          hwid: 'OPERATOR-CONSOLE',
+          ip: '127.0.0.1 (Local)',
+          status: 'SUCCESS',
+          message: `Login bem-sucedido do operador: ${username}`
+        });
+      }
+
+      lucide.createIcons();
+    }
+
+    function handleOperatorLogout() {
+      sessionStorage.removeItem(STORAGE_KEY_OPERATOR_SESSION);
+      localStorage.removeItem(STORAGE_KEY_OPERATOR_SESSION);
+      currentOperator = null;
+      lockOperatorAccess();
+      showToast("Sessão finalizada com sucesso.", "info");
+    }
+
+    function lockOperatorAccess() {
+      document.getElementById('auth-gate-screen').classList.remove('hidden');
+      document.getElementById('main-panel-app').classList.add('hidden');
+      document.getElementById('operator-login-form').reset();
+      document.getElementById('login-error-msg').classList.add('hidden');
+      lucide.createIcons();
+    }
+
+    function togglePasswordVisibility() {
+      const pwdInput = document.getElementById('login-password');
+      const icon = document.getElementById('toggle-pwd-icon');
+      if (pwdInput.type === 'password') {
+        pwdInput.type = 'text';
+        icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        pwdInput.type = 'password';
+        icon.setAttribute('data-lucide', 'eye');
+      }
+      lucide.createIcons();
+    }
+
+    /* ================= DATABASE CLEAN INIT ================= */
+    function initDatabase() {
+      try {
+        const storedKeys = localStorage.getItem(STORAGE_KEY_AUTH_KEYS);
+        const storedLogs = localStorage.getItem(STORAGE_KEY_AUTH_LOGS);
+        const storedBlacklist = localStorage.getItem(STORAGE_KEY_AUTH_BLACKLIST);
+
+        // Arrays zerados por padrão
+        keys = storedKeys ? JSON.parse(storedKeys) : [];
+        logs = storedLogs ? JSON.parse(storedLogs) : [];
+        blacklist = storedBlacklist ? JSON.parse(storedBlacklist) : [];
+
+        saveKeys();
+        saveLogs();
+        saveBlacklist();
+      } catch (err) {
+        console.error("Erro ao inicializar StreetAuth database:", err);
+        keys = [];
+        logs = [];
+        blacklist = [];
+      }
+    }
+
+    function saveKeys() {
+      localStorage.setItem(STORAGE_KEY_AUTH_KEYS, JSON.stringify(keys));
+    }
+    function saveLogs() {
+      localStorage.setItem(STORAGE_KEY_AUTH_LOGS, JSON.stringify(logs));
+    }
+    function saveBlacklist() {
+      localStorage.setItem(STORAGE_KEY_AUTH_BLACKLIST, JSON.stringify(blacklist));
+    }
+
+    function randomBlock(len = 4) {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let res = '';
+      for (let i = 0; i < len; i++) {
+        res += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return res;
+    }
+
+    function generateKeyString(prefix = 'STREET') {
+      const p = prefix.trim() ? prefix.trim().toUpperCase() + '-' : 'STREET-';
+      return `${p}${randomBlock()}-${randomBlock()}-${randomBlock()}`;
+    }
+
+    function isKeyActive(k) {
+      if (k.isManualExpired) return false;
+      if (k.expiresAt === 'lifetime') return true;
+      return new Date(k.expiresAt).getTime() > Date.now();
+    }
+
+    function isHwidBanned(hwid) {
+      if (!hwid) return false;
+      return blacklist.some(b => b.hwid.toUpperCase() === hwid.toUpperCase());
+    }
+
+    /* ================= MODAL DE CRIAÇÃO DE KEYS ================= */
+    function openCreateKeyModal() {
+      const modalCont = document.getElementById('modal-container');
+      modalCont.innerHTML = `
+        <div class="bg-street-900 border border-street-800 rounded-3xl max-w-lg w-full p-6 lg:p-7 shadow-2xl space-y-5 glow-street-red-sm">
+          <div class="flex items-center justify-between pb-4 border-b border-street-800">
+            <div class="flex items-center gap-3">
+              <div class="p-2.5 bg-red-500/10 text-street-red rounded-xl border border-red-500/25">
+                <i data-lucide="key-round" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-white text-base">Criar Street Keys</h4>
+                <p class="text-xs text-slate-400">Gere licenças individuais ou em lote</p>
+              </div>
+            </div>
+            <button onclick="document.getElementById('modal-container').classList.add('hidden')" class="text-slate-400 hover:text-white p-1 rounded-lg">
+              <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+          </div>
+
+          <form id="modal-key-form" onsubmit="handleModalCreateKeys(event)" class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">Quantidade</label>
+                <input type="number" id="modal-gen-quantity" min="1" max="50" value="1" required
+                  class="w-full bg-street-950 border border-street-800 rounded-xl px-3.5 py-2.5 text-white font-mono text-xs focus:outline-none focus:border-street-red">
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">Validade</label>
+                <select id="modal-gen-duration" onchange="toggleModalCustomDuration(this.value)"
+                  class="w-full bg-street-950 border border-street-800 rounded-xl px-3 py-2.5 text-white text-xs focus:outline-none focus:border-street-red">
+                  <option value="1">1 Dia (Trial)</option>
+                  <option value="7">7 Dias (Semanal)</option>
+                  <option value="30" selected>30 Dias (Mensal Devs)</option>
+                  <option value="90">90 Dias (Trimestral)</option>
+                  <option value="365">365 Dias (Anual Devs)</option>
+                  <option value="lifetime">Vitalícia (Lifetime)</option>
+                  <option value="custom">Personalizado (Dias)</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="modal-custom-days-wrapper" class="hidden">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">Dias Personalizados</label>
+              <input type="number" id="modal-gen-custom-days" min="1" max="5000" placeholder="Ex: 45"
+                class="w-full bg-street-950 border border-street-800 rounded-xl px-3.5 py-2 text-white font-mono text-xs focus:outline-none focus:border-street-red">
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">Prefixo</label>
+                <input type="text" id="modal-gen-prefix" value="STREET" maxlength="8"
+                  class="w-full uppercase bg-street-950 border border-street-800 rounded-xl px-3.5 py-2.5 text-white font-mono text-xs focus:outline-none focus:border-street-red">
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">Cliente / Nota</label>
+                <input type="text" id="modal-gen-note" placeholder="Ex: Cliente #1"
+                  class="w-full bg-street-950 border border-street-800 rounded-xl px-3.5 py-2.5 text-white text-xs focus:outline-none focus:border-street-red">
+              </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-3 border-t border-street-800">
+              <button type="button" onclick="document.getElementById('modal-container').classList.add('hidden')" class="px-4 py-2.5 rounded-xl bg-street-800 hover:bg-street-700 text-slate-300 text-xs font-semibold">
+                Cancelar
+              </button>
+              <button type="submit" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-street-red to-red-700 hover:from-red-500 hover:to-red-600 text-white text-xs font-bold shadow-lg glow-street-red-sm flex items-center gap-1.5">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                Gerar Chave(s)
+              </button>
+            </div>
+          </form>
+        </div>
+      `;
+      modalCont.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function toggleModalCustomDuration(val) {
+      const wrap = document.getElementById('modal-custom-days-wrapper');
+      if (val === 'custom') {
+        wrap.classList.remove('hidden');
+        document.getElementById('modal-gen-custom-days').focus();
+      } else {
+        wrap.classList.add('hidden');
+      }
+    }
+
+    function handleModalCreateKeys(e) {
+      e.preventDefault();
+      const qty = parseInt(document.getElementById('modal-gen-quantity').value, 10) || 1;
+      const durationVal = document.getElementById('modal-gen-duration').value;
+      const customDays = parseInt(document.getElementById('modal-gen-custom-days')?.value, 10);
+      const prefix = document.getElementById('modal-gen-prefix').value || 'STREET';
+      const clientNote = document.getElementById('modal-gen-note').value;
+
+      let days = 30;
+      let isLifetime = false;
+
+      if (durationVal === 'lifetime') {
+        isLifetime = true;
+      } else if (durationVal === 'custom') {
+        days = customDays || 30;
+      } else {
+        days = parseInt(durationVal, 10) || 30;
+      }
+
+      for (let i = 0; i < qty; i++) {
+        const now = new Date();
+        let expiresAt = 'lifetime';
+        if (!isLifetime) {
+          const expDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+          expiresAt = expDate.toISOString();
+        }
+
+        const newKey = {
+          id: 'street_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+          key: generateKeyString(prefix),
+          clientNote: clientNote.trim() || 'Cliente StreetDevs',
+          hwid: null,
+          resetsCount: 0,
+          duration: isLifetime ? 'lifetime' : days.toString(),
+          createdAt: now.toISOString(),
+          expiresAt: expiresAt,
+          isManualExpired: false
+        };
+
+        keys.unshift(newKey);
+      }
+
+      saveKeys();
+      document.getElementById('modal-container').classList.add('hidden');
+      showToast(`${qty} Street Key(s) gerada(s) com sucesso!`, 'success');
+
+      renderKeysTable();
+      updateDashboardStats();
+    }
+
+    /* ================= GESTÃO DE HWID E KEYS ================= */
+    function resetHwid(keyId) {
+      const k = keys.find(item => item.id === keyId);
+      if (!k) return;
+
+      const previousHwid = k.hwid;
+      k.hwid = null;
+      k.resetsCount = (k.resetsCount || 0) + 1;
+      saveKeys();
+      
+      addLog({
+        key: k.key,
+        hwid: previousHwid || 'Nenhum',
+        ip: '127.0.0.1 (Street Admin)',
+        status: 'SUCCESS',
+        message: `HWID resetado com sucesso (Reset #${k.resetsCount}).`
+      });
+
+      showToast(`HWID resetado com sucesso para ${k.key}! (Total: ${k.resetsCount})`, 'success');
+      renderKeysTable();
+      updateDashboardStats();
+    }
+
+    function toggleExpireKey(keyId) {
+      const k = keys.find(item => item.id === keyId);
+      if (!k) return;
+
+      if (isKeyActive(k)) {
+        k.isManualExpired = true;
+        showToast(`A Street Key ${k.key} foi expirada manualmente.`, 'warning');
+      } else {
+        k.isManualExpired = false;
+        if (k.expiresAt !== 'lifetime' && new Date(k.expiresAt).getTime() <= Date.now()) {
+          k.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        }
+        showToast(`Street Key ${k.key} reativada!`, 'success');
+      }
+
+      saveKeys();
+      renderKeysTable();
+      updateDashboardStats();
+    }
+
+    function extendKeyDays(keyId) {
+      const k = keys.find(item => item.id === keyId);
+      if (!k) return;
+
+      showPromptModal("Estender Street Key", `Quantos dias adicionar à licença ${k.key}?`, "30", (val) => {
+        const addedDays = parseInt(val, 10);
+        if (isNaN(addedDays) || addedDays <= 0) {
+          showToast("Insira um número de dias válido.", "danger");
+          return;
+        }
+
+        k.isManualExpired = false;
+        let baseTime = Date.now();
+        if (k.expiresAt !== 'lifetime' && new Date(k.expiresAt).getTime() > Date.now()) {
+          baseTime = new Date(k.expiresAt).getTime();
+        }
+        k.expiresAt = new Date(baseTime + addedDays * 24 * 60 * 60 * 1000).toISOString();
+        
+        saveKeys();
+        showToast(`+${addedDays} dias adicionados com sucesso!`, 'success');
+        renderKeysTable();
+        updateDashboardStats();
+      });
+    }
+
+    function banHwidFromKey(keyId) {
+      const k = keys.find(item => item.id === keyId);
+      if (!k || !k.hwid) {
+        showToast("Essa chave não possui nenhum HWID vinculado.", "warning");
+        return;
+      }
+
+      banHwidDirect(k.hwid, `Banido via chave ${k.key}`);
+    }
+
+    function banHwidDirect(hwid, defaultReason = 'Bloqueado por violação StreetDevs') {
+      if (!hwid) return;
+      if (isHwidBanned(hwid)) {
+        showToast("Este HWID já está na Blacklist Street.", "info");
+        return;
+      }
+
+      blacklist.unshift({
+        hwid: hwid.trim().toUpperCase(),
+        reason: defaultReason,
+        bannedAt: new Date().toISOString()
+      });
+
+      saveBlacklist();
+
+      addLog({
+        key: 'N/A',
+        hwid: hwid,
+        ip: '127.0.0.1 (Street Admin)',
+        status: 'BANNED',
+        message: `HWID bloqueado: ${defaultReason}`
+      });
+
+      showToast(`HWID ${hwid} inserido na Blacklist!`, 'danger');
+      renderKeysTable();
+      renderBlacklistTable();
+      updateDashboardStats();
+    }
+
+    function unbanHwid(hwid) {
+      blacklist = blacklist.filter(b => b.hwid.toUpperCase() !== hwid.toUpperCase());
+      saveBlacklist();
+      showToast(`HWID ${hwid} liberado da Blacklist.`, 'success');
+      renderKeysTable();
+      renderBlacklistTable();
+      updateDashboardStats();
+    }
+
+    function deleteKey(keyId) {
+      showConfirmModal("Excluir Street Key", "Deseja remover esta licença definitivamente?", () => {
+        keys = keys.filter(k => k.id !== keyId);
+        saveKeys();
+        showToast("Chave deletada com sucesso.", "info");
+        renderKeysTable();
+        updateDashboardStats();
+      });
+    }
+
+    function copyKeyToClipboard(text) {
+      const temp = document.createElement('textarea');
+      temp.value = text;
+      document.body.appendChild(temp);
+      temp.select();
+      try {
+        document.execCommand('copy');
+        showToast(`Copiado: ${text}`, 'success');
+      } catch (err) {
+        showToast("Falha ao copiar para área de transferência.", 'danger');
+      }
+      document.body.removeChild(temp);
+    }
+
+    function addLog(entry) {
+      logs.unshift({
+        id: 'l_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+        timestamp: new Date().toISOString(),
+        key: entry.key || 'N/A',
+        hwid: entry.hwid || 'N/A',
+        ip: entry.ip || '189.34.201.88',
+        status: entry.status,
+        message: entry.message || ''
+      });
+      if (logs.length > 300) logs.pop();
+      saveLogs();
+      renderLogsTable();
+      renderDashboardRecentLogs();
+    }
+
+    function clearAllLogsConfirmation() {
+      showConfirmModal("Limpar Logs", "Deseja apagar todos os registros de log do StreetAuth?", () => {
+        logs = [];
+        saveLogs();
+        showToast("Histórico de logs zerado.", "info");
+        renderLogsTable();
+        renderDashboardRecentLogs();
+        updateDashboardStats();
+      });
+    }
+
+    function exportLogsJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(logs, null, 2));
+      const dlAnchor = document.createElement('a');
+      dlAnchor.setAttribute("href", dataStr);
+      dlAnchor.setAttribute("download", `streetauth_logs_${Date.now()}.json`);
+      dlAnchor.click();
+      showToast("Download dos logs iniciado.", "success");
+    }
+
+    function exportKeysJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(keys, null, 2));
+      const dlAnchor = document.createElement('a');
+      dlAnchor.setAttribute("href", dataStr);
+      dlAnchor.setAttribute("download", `streetauth_keys_${Date.now()}.json`);
+      dlAnchor.click();
+      showToast("Download das chaves iniciado.", "success");
+    }
+
+    function expireAllOutdatedKeys() {
+      let count = 0;
+      keys.forEach(k => {
+        if (!k.isManualExpired && k.expiresAt !== 'lifetime' && new Date(k.expiresAt).getTime() <= Date.now()) {
+          k.isManualExpired = true;
+          count++;
+        }
+      });
+      saveKeys();
+      showToast(`Varredura StreetDevs concluída: ${count} chave(s) expirada(s).`, "info");
+      renderKeysTable();
+      updateDashboardStats();
+    }
+
+    /* ================= RENDERIZADORES DE TABELA ================= */
+    function renderKeysTable() {
+      const tbody = document.getElementById('keys-table-body');
+      const placeholder = document.getElementById('no-keys-placeholder');
+      const search = (document.getElementById('search-key-input')?.value || '').trim().toLowerCase();
+      const statusFilter = document.getElementById('filter-key-status')?.value || 'all';
+
+      let filtered = keys.filter(k => {
+        const matchesSearch = k.key.toLowerCase().includes(search) ||
+                              (k.clientNote && k.clientNote.toLowerCase().includes(search)) ||
+                              (k.hwid && k.hwid.toLowerCase().includes(search));
+
+        if (!matchesSearch) return false;
+
+        const active = isKeyActive(k);
+        const hasHwid = !!k.hwid;
+        const hwidBanned = isHwidBanned(k.hwid);
+
+        if (statusFilter === 'active') return active;
+        if (statusFilter === 'expired') return !active;
+        if (statusFilter === 'bound') return hasHwid;
+        if (statusFilter === 'unbound') return !hasHwid;
+        if (statusFilter === 'banned') return hwidBanned;
+
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        placeholder.classList.remove('hidden');
+        return;
+      }
+
+      placeholder.classList.add('hidden');
+
+      tbody.innerHTML = filtered.map(k => {
+        const active = isKeyActive(k);
+        const hwidBanned = isHwidBanned(k.hwid);
+
+        let statusBadge = '';
+        if (hwidBanned) {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-600/20 text-red-400 border border-red-500/40">HWID BAN</span>';
+        } else if (active) {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-street-neon border border-emerald-500/30">ATIVA</span>';
+        } else {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">EXPIRADA</span>';
+        }
+
+        let expText = 'Vitalícia';
+        if (k.expiresAt !== 'lifetime') {
+          const d = new Date(k.expiresAt);
+          expText = d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        const hwidDisplay = k.hwid 
+          ? `<span class="text-red-300 font-mono text-[11px]">${k.hwid}</span>`
+          : `<span class="text-slate-500 italic text-[11px]">Não fixado</span>`;
+
+        const resetsCount = k.resetsCount || 0;
+
+        return `
+          <tr class="hover:bg-street-800/40 transition-colors">
+            <td class="py-3 px-4">
+              <div class="flex items-center gap-2">
+                <span class="text-red-400 font-bold">${k.key}</span>
+                <button onclick="copyKeyToClipboard('${k.key}')" title="Copiar Chave" class="text-slate-400 hover:text-white p-1 hover:bg-street-800 rounded">
+                  <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </td>
+            <td class="py-3 px-4">${statusBadge}</td>
+            <td class="py-3 px-4 text-slate-300 font-sans text-xs">${k.clientNote || 'N/A'}</td>
+            <td class="py-3 px-4">${hwidDisplay}</td>
+            <td class="py-3 px-4">
+              <span class="px-2 py-0.5 rounded bg-street-950 border border-street-800 text-[11px] text-slate-300">
+                ${resetsCount} reset${resetsCount === 1 ? '' : 's'}
+              </span>
+            </td>
+            <td class="py-3 px-4 text-slate-400 text-xs">${expText}</td>
+            <td class="py-3 px-4 text-right">
+              <div class="flex items-center justify-end gap-1 font-sans">
+                <!-- Reset HWID -->
+                <button onclick="resetHwid('${k.id}')" title="Resetar HWID" 
+                  class="p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all ${!k.hwid ? 'opacity-40 cursor-not-allowed' : ''}">
+                  <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                </button>
+
+                <!-- Ban / Unban HWID -->
+                ${k.hwid ? `
+                  <button onclick="${hwidBanned ? `unbanHwid('${k.hwid}')` : `banHwidFromKey('${k.id}')`}" 
+                    title="${hwidBanned ? 'Desbanir HWID' : 'Banir HWID'}"
+                    class="p-1.5 rounded-lg ${hwidBanned ? 'text-red-400 bg-red-600/20' : 'text-slate-300 hover:text-red-400 hover:bg-red-500/10'} border border-transparent transition-all">
+                    <i data-lucide="shield-x" class="w-4 h-4"></i>
+                  </button>
+                ` : ''}
+
+                <!-- Estender Licença -->
+                <button onclick="extendKeyDays('${k.id}')" title="Adicionar Dias" 
+                  class="p-1.5 rounded-lg text-slate-300 hover:text-emerald-400 hover:bg-emerald-500/10 border border-transparent hover:border-emerald-500/20 transition-all">
+                  <i data-lucide="calendar-plus" class="w-4 h-4"></i>
+                </button>
+
+                <!-- Expirar / Reativar Manual -->
+                <button onclick="toggleExpireKey('${k.id}')" title="${active ? 'Expirar Manualmente' : 'Reativar Chave'}" 
+                  class="p-1.5 rounded-lg text-slate-300 hover:text-amber-400 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 transition-all">
+                  <i data-lucide="power" class="w-4 h-4"></i>
+                </button>
+
+                <!-- Deletar -->
+                <button onclick="deleteKey('${k.id}')" title="Excluir Chave" 
+                  class="p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function renderLogsTable() {
+      const tbody = document.getElementById('logs-table-body');
+      const placeholder = document.getElementById('no-logs-placeholder');
+      const search = (document.getElementById('search-logs-input')?.value || '').trim().toLowerCase();
+      const statusFilter = document.getElementById('filter-log-status')?.value || 'all';
+
+      let filtered = logs.filter(l => {
+        const matchesSearch = (l.key && l.key.toLowerCase().includes(search)) ||
+                              (l.hwid && l.hwid.toLowerCase().includes(search)) ||
+                              (l.ip && l.ip.toLowerCase().includes(search)) ||
+                              (l.message && l.message.toLowerCase().includes(search));
+
+        if (!matchesSearch) return false;
+        if (statusFilter !== 'all' && l.status !== statusFilter) return false;
+
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        placeholder.classList.remove('hidden');
+        return;
+      }
+
+      placeholder.classList.add('hidden');
+
+      tbody.innerHTML = filtered.map(l => {
+        let statusBadge = '';
+        if (l.status === 'SUCCESS') {
+          statusBadge = '<span class="text-street-neon font-bold flex items-center gap-1"><i data-lucide="check" class="w-3.5 h-3.5"></i> OK</span>';
+        } else if (l.status === 'BANNED') {
+          statusBadge = '<span class="text-red-500 font-bold flex items-center gap-1"><i data-lucide="shield-x" class="w-3.5 h-3.5"></i> BAN</span>';
+        } else {
+          statusBadge = '<span class="text-amber-400 font-bold flex items-center gap-1"><i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> FALHA</span>';
+        }
+
+        const dateStr = new Date(l.timestamp).toLocaleString('pt-BR');
+
+        return `
+          <tr class="hover:bg-street-800/40 transition-colors">
+            <td class="py-3 px-4 text-slate-400">${dateStr}</td>
+            <td class="py-3 px-4">${statusBadge}</td>
+            <td class="py-3 px-4 text-red-400 font-bold">${l.key}</td>
+            <td class="py-3 px-4 text-slate-300">${l.hwid}</td>
+            <td class="py-3 px-4 text-slate-400">${l.ip}</td>
+            <td class="py-3 px-4 text-slate-300 font-sans text-xs">${l.message}</td>
+          </tr>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function renderDashboardRecentLogs() {
+      const tbody = document.getElementById('dashboard-recent-logs');
+      if (!tbody) return;
+
+      const recent = logs.slice(0, 5);
+      if (recent.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-slate-500 font-sans">Nenhum evento registrado. Base limpa.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = recent.map(l => {
+        let statusColor = 'text-street-neon';
+        if (l.status === 'FAILED') statusColor = 'text-amber-400';
+        if (l.status === 'BANNED') statusColor = 'text-red-500';
+
+        const timeOnly = new Date(l.timestamp).toLocaleTimeString('pt-BR');
+
+        return `
+          <tr class="hover:bg-street-800/30">
+            <td class="py-2.5 px-3 ${statusColor} font-bold">${l.status}</td>
+            <td class="py-2.5 px-3 text-red-400">${l.key.substring(0, 16)}...</td>
+            <td class="py-2.5 px-3 text-slate-300">${l.hwid.substring(0, 16)}...</td>
+            <td class="py-2.5 px-3 text-slate-500">${timeOnly}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderBlacklistTable() {
+      const tbody = document.getElementById('blacklist-table-body');
+      const placeholder = document.getElementById('no-blacklist-placeholder');
+
+      if (blacklist.length === 0) {
+        tbody.innerHTML = '';
+        placeholder.classList.remove('hidden');
+        return;
+      }
+
+      placeholder.classList.add('hidden');
+
+      tbody.innerHTML = blacklist.map(b => {
+        const dateStr = new Date(b.bannedAt).toLocaleString('pt-BR');
+        return `
+          <tr class="hover:bg-street-800/40 transition-colors">
+            <td class="py-3 px-4 text-red-400 font-bold">${b.hwid}</td>
+            <td class="py-3 px-4 text-slate-300 font-sans text-xs">${b.reason}</td>
+            <td class="py-3 px-4 text-slate-400 text-xs">${dateStr}</td>
+            <td class="py-3 px-4 text-right">
+              <button onclick="unbanHwid('${b.hwid}')" class="px-3 py-1.5 rounded-lg bg-street-850 hover:bg-emerald-600/20 text-slate-300 hover:text-emerald-400 border border-street-700 text-xs font-sans transition-all">
+                Revogar Ban
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function updateDashboardStats() {
+      const totalKeys = keys.length;
+      const activeKeys = keys.filter(k => isKeyActive(k)).length;
+      const expiredKeys = totalKeys - activeKeys;
+      const bannedHwids = blacklist.length;
+      const totalLogins = logs.length;
+
+      document.getElementById('stat-total-keys').innerText = totalKeys;
+      document.getElementById('stat-active-keys').innerText = activeKeys;
+      document.getElementById('stat-expired-keys').innerText = expiredKeys;
+      document.getElementById('stat-banned-hwid').innerText = bannedHwids;
+      document.getElementById('stat-total-logins').innerText = totalLogins;
+
+      renderDashboardRecentLogs();
+    }
+
+    function switchTab(tabId) {
+      const tabs = ['dashboard', 'keys', 'logs', 'blacklist'];
+      tabs.forEach(t => {
+        const el = document.getElementById('tab-' + t);
+        const nav = document.getElementById('nav-' + t);
+        if (t === tabId) {
+          el.classList.remove('hidden');
+          nav.className = "nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-white bg-street-red/15 border border-street-red/40 text-red-400";
+        } else {
+          el.classList.add('hidden');
+          nav.className = "nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-slate-400 hover:text-white hover:bg-street-850";
+        }
+      });
+
+      const titleEl = document.getElementById('view-title');
+      const subtitleEl = document.getElementById('view-subtitle');
+
+      const meta = {
+        dashboard: { title: 'Painel Geral', sub: 'Visão geral das chaves, trava de HWID e auditoria em tempo real' },
+        keys: { title: 'Chaves de Licença', sub: 'Controle de licenças, reset de HWID e status de clientes' },
+        logs: { title: 'Logs de Acesso', sub: 'Histórico de conexões, tentativas, IPs e diagnósticos' },
+        blacklist: { title: 'Blacklist HWID', sub: 'Bloqueio preventivo e segurança do ecossistema Street' }
+      };
+
+      if (meta[tabId]) {
+        titleEl.innerText = meta[tabId].title;
+        subtitleEl.innerText = meta[tabId].sub;
+      }
+
+      if (tabId === 'keys') renderKeysTable();
+      if (tabId === 'logs') renderLogsTable();
+      if (tabId === 'blacklist') renderBlacklistTable();
+      if (tabId === 'dashboard') updateDashboardStats();
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      let borderClass = 'border-red-500/40 text-red-300';
+      let icon = 'info';
+      if (type === 'success') {
+        borderClass = 'border-emerald-500/40 text-street-neon';
+        icon = 'check-circle-2';
+      } else if (type === 'danger') {
+        borderClass = 'border-red-500/60 text-red-400';
+        icon = 'alert-octagon';
+      } else if (type === 'warning') {
+        borderClass = 'border-amber-500/40 text-amber-300';
+        icon = 'alert-triangle';
+      }
+
+      toast.className = `pointer-events-auto flex items-center gap-3 bg-street-900 border ${borderClass} px-4 py-3 rounded-xl shadow-2xl text-xs max-w-sm transition-all duration-300`;
+      toast.innerHTML = `
+        <i data-lucide="${icon}" class="w-4 h-4 shrink-0"></i>
+        <div class="flex-1 font-semibold">${message}</div>
+      `;
+
+      container.appendChild(toast);
+      lucide.createIcons();
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function showConfirmModal(title, text, onConfirm) {
+      const modalCont = document.getElementById('modal-container');
+      modalCont.innerHTML = `
+        <div class="bg-street-900 border border-street-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="p-2 bg-red-500/10 text-red-400 rounded-xl border border-red-500/25">
+              <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+            </div>
+            <h4 class="font-bold text-white text-base">${title}</h4>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">${text}</p>
+          <div class="flex justify-end gap-2 pt-2">
+            <button id="modal-cancel-btn" class="px-4 py-2 rounded-xl bg-street-800 hover:bg-street-700 text-slate-300 text-xs font-semibold">Cancelar</button>
+            <button id="modal-confirm-btn" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold">Confirmar</button>
+          </div>
+        </div>
+      `;
+      modalCont.classList.remove('hidden');
+      lucide.createIcons();
+
+      document.getElementById('modal-cancel-btn').onclick = () => modalCont.classList.add('hidden');
+      document.getElementById('modal-confirm-btn').onclick = () => {
+        modalCont.classList.add('hidden');
+        if (typeof onConfirm === 'function') onConfirm();
+      };
+    }
+
+    function showPromptModal(title, text, defaultValue, onConfirm) {
+      const modalCont = document.getElementById('modal-container');
+      modalCont.innerHTML = `
+        <div class="bg-street-900 border border-street-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+          <h4 class="font-bold text-white text-base">${title}</h4>
+          <p class="text-xs text-slate-300">${text}</p>
+          <input type="text" id="modal-prompt-input" value="${defaultValue}" 
+            class="w-full bg-street-950 border border-street-800 rounded-xl px-4 py-2 text-white text-xs focus:outline-none focus:border-street-red font-mono">
+          <div class="flex justify-end gap-2 pt-2">
+            <button id="modal-cancel-btn" class="px-4 py-2 rounded-xl bg-street-800 hover:bg-street-700 text-slate-300 text-xs font-semibold">Cancelar</button>
+            <button id="modal-confirm-btn" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold">Salvar</button>
+          </div>
+        </div>
+      `;
+      modalCont.classList.remove('hidden');
+      document.getElementById('modal-prompt-input').focus();
+
+      document.getElementById('modal-cancel-btn').onclick = () => modalCont.classList.add('hidden');
+      document.getElementById('modal-confirm-btn').onclick = () => {
+        const val = document.getElementById('modal-prompt-input').value;
+        modalCont.classList.add('hidden');
+        if (typeof onConfirm === 'function') onConfirm(val);
+      };
+    }
+
+    function openBanHWIDModal() {
+      const modalCont = document.getElementById('modal-container');
+      modalCont.innerHTML = `
+        <div class="bg-street-900 border border-street-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="p-2 bg-red-500/10 text-red-400 rounded-xl border border-red-500/25">
+              <i data-lucide="shield-alert" class="w-5 h-5"></i>
+            </div>
+            <h4 class="font-bold text-white text-base">Bloquear HWID (Blacklist)</h4>
+          </div>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">HWID Alvo</label>
+              <input type="text" id="modal-ban-hwid" placeholder="HWID-STREET-XXXX-XXXX" 
+                class="w-full bg-street-950 border border-street-800 rounded-xl px-4 py-2 text-white text-xs focus:outline-none focus:border-red-500 font-mono">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Motivo do Bloqueio</label>
+              <input type="text" id="modal-ban-reason" placeholder="Ex: Compartilhamento indevido" 
+                class="w-full bg-street-950 border border-street-800 rounded-xl px-4 py-2 text-white text-xs focus:outline-none focus:border-red-500">
+            </div>
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <button id="modal-cancel-btn" class="px-4 py-2 rounded-xl bg-street-800 hover:bg-street-700 text-slate-300 text-xs font-semibold">Cancelar</button>
+            <button id="modal-confirm-btn" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold">Banir Agora</button>
+          </div>
+        </div>
+      `;
+      modalCont.classList.remove('hidden');
+      lucide.createIcons();
+
+      document.getElementById('modal-cancel-btn').onclick = () => modalCont.classList.add('hidden');
+      document.getElementById('modal-confirm-btn').onclick = () => {
+        const h = document.getElementById('modal-ban-hwid').value.trim();
+        const r = document.getElementById('modal-ban-reason').value.trim() || 'Bloqueado por regras StreetDevs';
+        if (!h) {
+          showToast("Informe o HWID para banir.", "danger");
+          return;
+        }
+        modalCont.classList.add('hidden');
+        banHwidDirect(h, r);
+      };
+    }
+
+    function resetAllDataConfirmation() {
+      showConfirmModal("Limpar Todos os Dados", "Deseja resetar todas as chaves, logs e blacklist? O sistema ficará 100% zerado.", () => {
+        localStorage.removeItem(STORAGE_KEY_AUTH_KEYS);
+        localStorage.removeItem(STORAGE_KEY_AUTH_LOGS);
+        localStorage.removeItem(STORAGE_KEY_AUTH_BLACKLIST);
+        initDatabase();
+        renderKeysTable();
+        renderLogsTable();
+        renderBlacklistTable();
+        updateDashboardStats();
+        showToast("Base de dados totalmente zerada.", "info");
+      });
+    }
+
+    window.onload = function() {
+      initDatabase();
+      checkOperatorSession();
+      updateDashboardStats();
+      renderKeysTable();
+      renderLogsTable();
+      renderBlacklistTable();
+      lucide.createIcons();
+    };
+  </script>
+</body>
+</html>
